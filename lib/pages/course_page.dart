@@ -6,9 +6,9 @@ class CoursePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue[100], // Same theme color as dashboard
+      backgroundColor: Colors.white, // Same theme color as dashboard
       appBar: AppBar(
-        backgroundColor: Colors.blue[700],
+        backgroundColor: Colors.white,
         title: const Text(
           'Courses',
           style: TextStyle(fontWeight: FontWeight.bold),
@@ -38,7 +38,7 @@ class CoursePage extends StatelessWidget {
                 children: [
                   courseBox(Icons.storage, 'DBMS', Colors.orangeAccent),
                   courseBox(Icons.computer, 'OOPS', Colors.greenAccent),
-                  courseBox(Icons.code, 'PYTHON', Colors.purpleAccent),
+                  courseBox(Icons.code, 'DSA', Colors.lightBlueAccent),
                 ],
               ),
             ),

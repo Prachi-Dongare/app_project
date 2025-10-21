@@ -7,7 +7,7 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue[100],
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('Profile'),
         centerTitle: true,
@@ -28,18 +28,18 @@ class ProfilePage extends StatelessWidget {
 
             // User Name
             Text(
-              'John Doe',
+              'IEEE Student',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue[900],
+                color: Colors.black,
               ),
             ),
             SizedBox(height: 10),
 
             // User Email
             Text(
-              'johndoe@example.com',
+              'student@example.com',
               style: TextStyle(fontSize: 18, color: Colors.black87),
             ),
             SizedBox(height: 40),

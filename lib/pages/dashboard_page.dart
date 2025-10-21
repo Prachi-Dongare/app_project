@@ -9,7 +9,7 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue[100],
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('E-Education App'),
         centerTitle: true,
@@ -25,7 +25,7 @@ class DashboardPage extends StatelessWidget {
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue[900],
+                color: Colors.amber[900],
               ),
             ),
             SizedBox(height: 10),
