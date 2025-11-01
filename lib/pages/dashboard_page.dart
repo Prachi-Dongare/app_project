@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'course_page.dart';
+import 'profile_page.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -18,14 +19,16 @@ class DashboardPage extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // Profile Icon
+          // Profile Icon - FIXED THIS PART
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Profile',
             onPressed: () {
-              // Will implement profile page later
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profile page coming soon!')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfilePage(),
+                ),
               );
             },
           ),
@@ -104,11 +107,17 @@ class DashboardPage extends StatelessWidget {
                         : null,
                     builder: (context, snapshot) {
                       int coursesEnrolled = 0;
+                      int videosWatched = 0;
 
                       if (snapshot.hasData && snapshot.data != null) {
                         final data = snapshot.data!.data() as Map<String, dynamic>?;
-                        if (data != null && data['coursesEnrolled'] != null) {
-                          coursesEnrolled = (data['coursesEnrolled'] as List).length;
+                        if (data != null) {
+                          if (data['coursesEnrolled'] != null) {
+                            coursesEnrolled = (data['coursesEnrolled'] as List).length;
+                          }
+                          if (data['videosWatched'] != null) {
+                            videosWatched = (data['videosWatched'] as List).length;
+                          }
                         }
                       }
 
@@ -116,7 +125,7 @@ class DashboardPage extends StatelessWidget {
                         children: [
                           _buildStatCard('Enrolled', '$coursesEnrolled'),
                           const SizedBox(width: 16),
-                          _buildStatCard('Completed', '0'),
+                          _buildStatCard('Watched', '$videosWatched'),
                           const SizedBox(width: 16),
                           _buildStatCard('Hours', '0'),
                         ],
