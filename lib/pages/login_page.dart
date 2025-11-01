@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -10,187 +11,229 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Controllers for text fields
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-
-  // Firebase Auth instance
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Loading state
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  // Email validator
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your email';
+    }
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value)) {
+      return 'Please enter a valid email';
+    }
+    return null;
+  }
+
+  // Password validator
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your password';
+    }
+    if (value.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    return null;
+  }
 
   // Login function
   Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      _showErrorDialog('Please enter both email and password');
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    // Dismiss keyboard
+    FocusScope.of(context).unfocus();
+
+    setState(() => _isLoading = true);
 
     try {
-      await _auth.signInWithEmailAndPassword(
+      print('Attempting login with: ${_emailController.text.trim()}');
+
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Navigate to dashboard on successful login
+      print('Login successful! User ID: ${userCredential.user?.uid}');
+
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardPage()),
-        );
+        _showSuccess('Welcome back! Redirecting to dashboard...');
       }
+
+      // The AuthWrapper will automatically navigate to dashboard
     } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Login failed';
-
-      print('Firebase Login Error Code: ${e.code}');
-      print('Firebase Login Error Message: ${e.message}');
-
-      if (e.code == 'user-not-found') {
-        errorMessage = 'No user found with this email';
-      } else if (e.code == 'wrong-password') {
-        errorMessage = 'Incorrect password';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'Invalid email address';
-      } else if (e.code == 'user-disabled') {
-        errorMessage = 'This account has been disabled';
-      } else if (e.code == 'invalid-credential') {
-        errorMessage = 'Invalid email or password';
-      } else {
-        errorMessage = 'Error: ${e.code}\n${e.message}';
-      }
-
-      _showErrorDialog(errorMessage);
+      print('Firebase Auth Error: ${e.code} - ${e.message}');
+      String message = _getAuthErrorMessage(e.code);
+      _showError(message);
     } catch (e) {
       print('General Login Error: $e');
-      _showErrorDialog('An unexpected error occurred: $e');
+      _showError('Network error. Please check your connection.');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  // Signup function with detailed error logging
+  // Signup function
   Future<void> _signup() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      _showErrorDialog('Please enter both email and password');
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    if (_passwordController.text.length < 6) {
-      _showErrorDialog('Password must be at least 6 characters long');
-      return;
-    }
+    // Dismiss keyboard
+    FocusScope.of(context).unfocus();
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      print('Attempting to create user with email: ${_emailController.text.trim()}');
+      print('Attempting signup with: ${_emailController.text.trim()}');
 
+      // Create user
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      print('User created successfully: ${userCredential.user?.uid}');
+      print('Signup successful! User ID: ${userCredential.user?.uid}');
 
-      // Navigate to dashboard on successful signup
+      // Store user data in Firestore
+      print('Creating user document in Firestore...');
+      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        'email': _emailController.text.trim(),
+        'joinedAt': FieldValue.serverTimestamp(),
+        'coursesEnrolled': [],
+        'coursesCompleted': [],
+        'totalWatchTime': 0,
+      });
+
+      print('User document created successfully!');
+
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardPage()),
-        );
+        _showSuccess('Account created! Redirecting to dashboard...');
       }
+
+      // The AuthWrapper will automatically navigate to dashboard
     } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Signup failed';
-
-      print('Firebase Signup Error Code: ${e.code}');
-      print('Firebase Signup Error Message: ${e.message}');
-
-      if (e.code == 'weak-password') {
-        errorMessage = 'Password is too weak';
-      } else if (e.code == 'email-already-in-use') {
-        errorMessage = 'An account already exists with this email';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'Invalid email address';
-      } else if (e.code == 'operation-not-allowed') {
-        errorMessage = 'Email/Password signup is not enabled. Please enable it in Firebase Console.';
-      } else if (e.code == 'network-request-failed') {
-        errorMessage = 'Network error. Please check your internet connection.';
-      } else {
-        errorMessage = 'Error: ${e.code}\n${e.message}';
-      }
-
-      _showErrorDialog(errorMessage);
+      print('Firebase Auth Error: ${e.code} - ${e.message}');
+      String message = _getAuthErrorMessage(e.code);
+      _showError(message);
     } catch (e) {
       print('General Signup Error: $e');
-      print('Error Type: ${e.runtimeType}');
-      _showErrorDialog('An unexpected error occurred: $e');
+      _showError('An error occurred. Please try again.');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  // Anonymous login function
+  // Anonymous login
   Future<void> _loginAnonymously() async {
-    setState(() {
-      _isLoading = true;
-    });
+    FocusScope.of(context).unfocus();
+    setState(() => _isLoading = true);
 
     try {
       print('Attempting anonymous login...');
       UserCredential userCredential = await _auth.signInAnonymously();
-      print('Anonymous login successful: ${userCredential.user?.uid}');
+      print('Anonymous login successful! User ID: ${userCredential.user?.uid}');
 
-      // Navigate to dashboard
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardPage()),
-        );
+        _showSuccess('Continuing as guest...');
       }
-    } on FirebaseAuthException catch (e) {
-      print('Firebase Anonymous Login Error Code: ${e.code}');
-      print('Firebase Anonymous Login Error Message: ${e.message}');
-      _showErrorDialog('Anonymous login failed: ${e.message}');
     } catch (e) {
-      print('General Anonymous Login Error: $e');
-      _showErrorDialog('Anonymous login failed: $e');
+      print('Anonymous login error: $e');
+      _showError('Guest login failed. Please try again.');
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  // Show error dialog
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Error'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+  // Get user-friendly error messages
+  String _getAuthErrorMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return '❌ No account found with this email.\n\nPlease use "Create Account" to sign up first.';
+      case 'wrong-password':
+        return '❌ Incorrect password.\n\nPlease try again or reset your password.';
+      case 'invalid-email':
+        return '❌ Invalid email address format.';
+      case 'user-disabled':
+        return '❌ This account has been disabled.';
+      case 'invalid-credential':
+        return '❌ Invalid email or password.\n\nIf you don\'t have an account, please use "Create Account".';
+      case 'weak-password':
+        return '❌ Password is too weak.\n\nUse at least 6 characters with a mix of letters and numbers.';
+      case 'email-already-in-use':
+        return '❌ An account already exists with this email.\n\nPlease use "Login" instead.';
+      case 'operation-not-allowed':
+        return '❌ Operation not allowed. Please contact support.';
+      case 'network-request-failed':
+        return '❌ Network error.\n\nPlease check your internet connection.';
+      case 'too-many-requests':
+        return '❌ Too many attempts.\n\nPlease try again later.';
+      default:
+        return '❌ An error occurred: $code\n\nPlease try again.';
+    }
+  }
+
+  // Show success message
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green[700],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Show error message
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.red[700],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -205,115 +248,212 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Login / Signup'),
-        centerTitle: true,
-        backgroundColor: Colors.blue,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: SingleChildScrollView(
+      backgroundColor: Colors.grey[50],
+      body: SafeArea(
+        child: _isLoading
+            ? Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 50),
-              // App title
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
               Text(
-                'Welcome Back!',
+                'Authenticating...',
                 style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue[900],
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // Email TextField
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: const Icon(Icons.email, color: Colors.blue),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Password TextField
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock, color: Colors.blue),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // Login Button
-              ElevatedButton.icon(
-                onPressed: _login,
-                icon: const Icon(Icons.login),
-                label: const Text('Login'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[700],
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(200, 50),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Signup Button
-              ElevatedButton.icon(
-                onPressed: _signup,
-                icon: const Icon(Icons.person_add),
-                label: const Text('Signup'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[700],
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(200, 50),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Divider
-              const Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10),
-                    child: Text('OR'),
-                  ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Anonymous Login Button
-              OutlinedButton.icon(
-                onPressed: _loginAnonymously,
-                icon: const Icon(Icons.person_outline),
-                label: const Text('Continue as Guest'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue[700],
-                  minimumSize: const Size(200, 50),
-                  side: BorderSide(color: Colors.blue[700]!),
+                  fontSize: 16,
+                  color: Colors.grey[700],
                 ),
               ),
             ],
+          ),
+        )
+            : SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 40),
+
+                // App Logo/Icon
+                Icon(
+                  Icons.school,
+                  size: 80,
+                  color: Colors.blue[700],
+                ),
+                const SizedBox(height: 24),
+
+                // Title
+                Text(
+                  'E-Education',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[900],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                Text(
+                  'Learn Anytime, Anywhere',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 48),
+
+                // Instructions Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue[700]),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'New user? Click "Create Account"\nExisting user? Click "Login"',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue[900],
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Email Field
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  validator: _validateEmail,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                    hintText: 'your@email.com',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Password Field
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  validator: _validatePassword,
+                  onFieldSubmitted: (_) => _login(),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    hintText: 'Enter your password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Login Button
+                ElevatedButton.icon(
+                  onPressed: _login,
+                  icon: const Icon(Icons.login),
+                  label: const Text(
+                    'Login',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 56),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Signup Button
+                ElevatedButton.icon(
+                  onPressed: _signup,
+                  icon: const Icon(Icons.person_add),
+                  label: const Text(
+                    'Create Account',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 56),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Divider
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey[400])),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey[400])),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Guest Login
+                OutlinedButton.icon(
+                  onPressed: _loginAnonymously,
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text(
+                    'Continue as Guest',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue[700],
+                    minimumSize: const Size(double.infinity, 56),
+                    side: BorderSide(color: Colors.blue[700]!, width: 2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Info Text
+                Text(
+                  'By continuing, you agree to our Terms of Service and Privacy Policy',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
