@@ -13,11 +13,14 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
-  # Latest stable Firebase versions (fixes the type casting bug)
+  # Firebase dependencies
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.4.4
   firebase_storage: ^12.3.4
+
+  # Video Player dependencies
+  youtube_player_flutter: ^9.0.3
 
 dev_dependencies:
   flutter_test:
